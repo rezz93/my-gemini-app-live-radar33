@@ -1,0 +1,6 @@
+{
+  "name": "Live Weather Radar",
+  "description": "Interactive live weather radar with real-time past, present, and future forecast nowcast timelines, multiple map styles, precipitation analysis, and standalone HTML export.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

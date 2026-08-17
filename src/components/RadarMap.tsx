@@ -28,8 +28,41 @@ function getHeadingCardinal(deg: number): string {
   return cardinals[index];
 }
 
-// Custom Leaflet GridLayer for dynamic storm advection, native upsampling & NWP future extrapolation
-function createRadarTileLayer(options: {
+// High-performance native TileLayer for Past and Live radar scans (supports zoom 0-18 without disappearing)
+function createStandardRadarLayer(options: {
+  host: string;
+  basePath: string;
+  colorScheme: number;
+  isSmooth: boolean;
+  isSnow: boolean;
+  tileSize: 256 | 512;
+  pane?: string;
+  zIndex?: number;
+}) {
+  const url = buildRadarTileUrl(
+    options.host,
+    options.basePath,
+    options.colorScheme,
+    options.isSmooth,
+    options.isSnow,
+    options.tileSize || 256
+  );
+
+  return L.tileLayer(url, {
+    tileSize: options.tileSize || 256,
+    pane: options.pane || 'radarPane',
+    zIndex: options.zIndex || 450,
+    opacity: 0,
+    maxNativeZoom: 12,
+    maxZoom: 18,
+    keepBuffer: 16,
+    updateWhenIdle: false,
+    updateWhenZooming: true,
+  });
+}
+
+// Custom Leaflet GridLayer for dynamic storm advection & NWP future extrapolation
+function createAdvectionRadarTileLayer(options: {
   host: string;
   basePath: string;
   colorScheme: number;
@@ -59,7 +92,7 @@ function createRadarTileLayer(options: {
       ctx.imageSmoothingQuality = 'high';
 
       const z = coords.z;
-      const nativeZ = Math.min(z, 7);
+      const nativeZ = Math.min(z, 10);
       const zoomDiff = z - nativeZ;
       const scale = Math.pow(2, zoomDiff);
       const nativeTotal = Math.pow(2, nativeZ);
@@ -180,6 +213,7 @@ function createRadarTileLayer(options: {
 
       drawJobs.forEach((job) => {
         const img = new Image();
+        img.crossOrigin = 'anonymous';
         img.onload = () => {
           ctx.drawImage(
             img,
@@ -218,7 +252,7 @@ function createRadarTileLayer(options: {
     zIndex: options.zIndex || 450,
     opacity: 0,
     maxZoom: 18,
-    keepBuffer: 12,
+    keepBuffer: 16,
     updateWhenIdle: false,
     updateWhenZooming: true,
   });
@@ -346,19 +380,32 @@ export const RadarMap: React.FC<RadarMapProps> = ({
       if (!radarLayersCacheRef.current.has(cacheKey)) {
         let layer: L.GridLayer | L.TileLayer;
 
-        layer = createRadarTileLayer({
-          host: radarHost,
-          basePath: frame.path,
-          colorScheme,
-          isSmooth,
-          isSnow,
-          tileSize,
-          forecastMinutes: isFuture ? (frame.forecastMinutes || 15) : 0,
-          stormHeadingDeg,
-          effectiveSpeedKmH,
-          pane: 'radarPane',
-          zIndex: 450,
-        });
+        if (isFuture && frame.isExtrapolated) {
+          layer = createAdvectionRadarTileLayer({
+            host: radarHost,
+            basePath: frame.path,
+            colorScheme,
+            isSmooth,
+            isSnow,
+            tileSize,
+            forecastMinutes: frame.forecastMinutes || 15,
+            stormHeadingDeg,
+            effectiveSpeedKmH,
+            pane: 'radarPane',
+            zIndex: 450,
+          });
+        } else {
+          layer = createStandardRadarLayer({
+            host: radarHost,
+            basePath: frame.path,
+            colorScheme,
+            isSmooth,
+            isSnow,
+            tileSize,
+            pane: 'radarPane',
+            zIndex: 450,
+          });
+        }
 
         layer.addTo(map);
         radarLayersCacheRef.current.set(cacheKey, layer);
